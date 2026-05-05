@@ -57,3 +57,9 @@ npm run dev
 ## Deploy
 
 Ver `render.yaml` — infraestructura lista para Render (web service + PostgreSQL).
+
+> **Build Command en el dashboard de Render** (actualizar manualmente si el servicio ya existe):
+> ```
+> NODE_ENV=development npm install && npx prisma generate && npm run build
+> ```
+> Render inyecta `NODE_ENV=production` en **todo** el entorno, incluyendo el build, lo que hace que `npm install` omita las `devDependencies` (`typescript`, `@types/*`, etc.). Sobreescribir `NODE_ENV` solo para el paso de install lo soluciona.
