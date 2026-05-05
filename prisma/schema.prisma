@@ -1,0 +1,84 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        String   @id @default(cuid())
+  username  String   @unique
+  email     String   @unique
+  password  String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  ownedRooms Room[]  @relation("RoomOwner")
+  scores     Score[]
+}
+
+model Room {
+  id         String   @id @default(cuid())
+  code       String   @unique
+  name       String
+  maxPlayers Int      @default(8)
+  ownerId    String
+  owner      User     @relation("RoomOwner", fields: [ownerId], references: [id])
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  games Game[]
+}
+
+model Game {
+  id        String     @id @default(cuid())
+  roomId    String
+  room      Room       @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  status    GameStatus @default(WAITING)
+  startedAt DateTime?
+  endedAt   DateTime?
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+
+  rounds Round[]
+  scores Score[]
+}
+
+enum GameStatus {
+  WAITING
+  IN_PROGRESS
+  FINISHED
+}
+
+model Round {
+  id         String   @id @default(cuid())
+  gameId     String
+  game       Game     @relation(fields: [gameId], references: [id], onDelete: Cascade)
+  animeId    Int
+  animeTitle String
+  imageUrls  String[]
+  order      Int
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  scores Score[]
+}
+
+model Score {
+  id      String  @id @default(cuid())
+  userId  String
+  user    User    @relation(fields: [userId], references: [id])
+  gameId  String
+  game    Game    @relation(fields: [gameId], references: [id], onDelete: Cascade)
+  roundId String
+  round   Round   @relation(fields: [roundId], references: [id], onDelete: Cascade)
+  points  Int     @default(0)
+  correct Boolean @default(false)
+  guess   String?
+
+  createdAt DateTime @default(now())
+
+  @@unique([userId, roundId])
+}
