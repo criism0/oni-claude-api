@@ -1,5 +1,5 @@
 import { Request, Response, NextFunction } from 'express';
-import { Prisma } from '@prisma/client';
+import { PrismaClientKnownRequestError } from '@prisma/client/runtime/library';
 import { AppError } from '../lib/errors';
 
 export function errorMiddleware(
@@ -13,7 +13,7 @@ export function errorMiddleware(
     return;
   }
 
-  if (err instanceof Prisma.PrismaClientKnownRequestError) {
+  if (err instanceof PrismaClientKnownRequestError) {
     if (err.code === 'P2002') {
       res.status(409).json({ error: 'Ya existe un registro con esos datos' });
       return;
