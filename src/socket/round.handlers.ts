@@ -34,7 +34,7 @@ export function startRound(
       io.to(roomId).emit('round:reveal', { roundId, percent })
 
       if (pct === 1.0) {
-        // TODO(tarea-9): leer animeTitle de DB (Round.animeTitle)
+        // TODO: conectar con lógica de rondas — leer animeTitle de DB (Round.animeTitle)
         io.to(roomId).emit('round:timeout', { roundId, animeTitle: '' })
         clearRound(roundId)
       }
@@ -78,7 +78,7 @@ export function registerRoundHandlers(io: AppServer, socket: AppSocket): void {
 
     clearRound(roundId)
 
-    // TODO(tarea-9): validar con isCloseEnough() de src/lib/levenshtein.ts y persistir Score en DB
+    // TODO: conectar con lógica de rondas — validar con isCloseEnough() (src/lib/levenshtein.ts) y persistir Score en DB
     // No reimplementar la lógica — extraer la función core de src/controllers/rounds.controller.ts
     const { userId, username } = socket.data.user
     io.to(roomId).emit('round:correct', { roundId, userId, username, points: 100 })

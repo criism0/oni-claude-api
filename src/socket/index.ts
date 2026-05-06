@@ -40,6 +40,10 @@ export function initSocket(httpServer: HttpServer): AppServer {
   })
 
   io.on('connection', (socket) => {
+    console.log(`[socket] connected: ${socket.data.user.username} (${socket.id})`)
+    socket.on('disconnect', () => {
+      console.log(`[socket] disconnected: ${socket.data.user.username} (${socket.id})`)
+    })
     registerRoomHandlers(socket)
     registerGameHandlers(io, socket)
     registerRoundHandlers(io, socket)

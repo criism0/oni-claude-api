@@ -6,7 +6,7 @@ const gameRounds = new Map<string, Set<string>>()
 
 export function registerGameHandlers(io: AppServer, socket: AppSocket): void {
   socket.on('game:start', ({ gameId }) => {
-    // TODO(tarea-9): validar que socket.data.user.userId sea el owner en DB
+    // TODO: conectar con lógica de salas — validar que socket.data.user.userId sea el owner en DB
     const activeRooms = [...socket.rooms].filter((r) => r !== socket.id)
     const roomId = activeRooms[0]
     if (!roomId) return
@@ -14,7 +14,7 @@ export function registerGameHandlers(io: AppServer, socket: AppSocket): void {
 
     io.to(roomId).emit('game:started', { gameId })
 
-    // TODO(tarea-9): reemplazar con query a DB para obtener las rondas reales del juego
+    // TODO: conectar con lógica de rondas — reemplazar con query a DB para obtener las rondas reales del juego
     const roundId = `${gameId}-round-1`
     gameRounds.set(gameId, new Set([roundId]))
 
@@ -27,7 +27,7 @@ export function registerGameHandlers(io: AppServer, socket: AppSocket): void {
   })
 
   socket.on('game:end', ({ gameId }) => {
-    // TODO(tarea-9): validar que socket.data.user.userId sea el owner en DB
+    // TODO: conectar con lógica de salas — validar que socket.data.user.userId sea el owner en DB
     const activeRooms = [...socket.rooms].filter((r) => r !== socket.id)
     const roomId = activeRooms[0]
 
@@ -38,7 +38,7 @@ export function registerGameHandlers(io: AppServer, socket: AppSocket): void {
     gameRounds.delete(gameId)
 
     if (roomId) {
-      // TODO(tarea-9): reemplazar scores: [] con scores reales desde DB
+      // TODO: conectar con lógica de puntuación — reemplazar scores: [] con scores reales desde DB
       io.to(roomId).emit('game:ended', { gameId, scores: [] })
     }
   })
