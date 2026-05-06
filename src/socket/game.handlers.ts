@@ -10,12 +10,12 @@ export function registerGameHandlers(io: AppServer, socket: AppSocket): void {
     const activeRooms = [...socket.rooms].filter((r) => r !== socket.id)
     const roomId = activeRooms[0]
     if (!roomId) return
+    if (gameRounds.has(gameId)) return
 
     io.to(roomId).emit('game:started', { gameId })
 
     // TODO(tarea-9): reemplazar con query a DB para obtener las rondas reales del juego
     const roundId = `${gameId}-round-1`
-    if (gameRounds.has(gameId)) return
     gameRounds.set(gameId, new Set([roundId]))
 
     startRound(io, socket.id, roomId, {
