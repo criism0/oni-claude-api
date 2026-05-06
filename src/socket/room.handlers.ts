@@ -12,13 +12,15 @@ export function registerRoomHandlers(socket: AppSocket): void {
     socket.to(roomId).emit('room:left', socket.data.user)
   })
 
-  socket.on('disconnect', () => {
-    clearSocketRounds(socket.id)
-
+  socket.on('disconnecting', () => {
     for (const roomId of socket.rooms) {
       if (roomId !== socket.id) {
         socket.to(roomId).emit('room:left', socket.data.user)
       }
     }
+  })
+
+  socket.on('disconnect', () => {
+    clearSocketRounds(socket.id)
   })
 }

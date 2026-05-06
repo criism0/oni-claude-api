@@ -8,6 +8,10 @@ import { registerGameHandlers } from './game.handlers'
 import { registerRoundHandlers } from './round.handlers'
 
 export function initSocket(httpServer: HttpServer): AppServer {
+  if (!process.env.JWT_SECRET) {
+    throw new Error('JWT_SECRET env var is required')
+  }
+
   const io = new Server(httpServer, {
     cors: {
       origin: process.env.CORS_ORIGIN || 'http://localhost:5173',

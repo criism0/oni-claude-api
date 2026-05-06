@@ -15,6 +15,7 @@ export function registerGameHandlers(io: AppServer, socket: AppSocket): void {
 
     // TODO(tarea-9): reemplazar con query a DB para obtener las rondas reales del juego
     const roundId = `${gameId}-round-1`
+    if (gameRounds.has(gameId)) return
     gameRounds.set(gameId, new Set([roundId]))
 
     startRound(io, socket.id, roomId, {

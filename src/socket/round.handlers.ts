@@ -21,6 +21,8 @@ export function startRound(
   tracked.add(roundId)
   socketRounds.set(socketId, tracked)
 
+  if (roundTimers.has(roundId)) return
+
   io.to(roomId).emit('round:start', { roundId, order, durationSec, totalRounds })
 
   const checkpoints = [0.25, 0.5, 0.75, 1.0]
@@ -51,6 +53,11 @@ export function clearRound(roundId: string): void {
     roundTimers.delete(roundId)
   }
   roundRoom.delete(roundId)
+
+  for (const [socketId, rounds] of socketRounds) {
+    rounds.delete(roundId)
+    if (rounds.size === 0) socketRounds.delete(socketId)
+  }
 }
 
 export function clearSocketRounds(socketId: string): void {
@@ -67,6 +74,7 @@ export function registerRoundHandlers(io: AppServer, socket: AppSocket): void {
   socket.on('round:guess', ({ roundId }) => {
     const roomId = roundRoom.get(roundId)
     if (!roomId) return
+    if (!socket.rooms.has(roomId)) return
 
     clearRound(roundId)
 
