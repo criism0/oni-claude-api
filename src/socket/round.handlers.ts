@@ -71,7 +71,7 @@ export function clearSocketRounds(socketId: string): void {
 }
 
 export function registerRoundHandlers(io: AppServer, socket: AppSocket): void {
-  socket.on('round:guess', ({ roundId }) => {
+  socket.on('round:guess', ({ roundId, guess: _guess }) => {
     const roomId = roundRoom.get(roundId)
     if (!roomId) return
     if (!socket.rooms.has(roomId)) return

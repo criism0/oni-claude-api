@@ -1,11 +1,11 @@
-import 'dotenv/config'
-import { httpServer } from './app'
-import { initSocket } from './socket'
+import 'dotenv/config';
+import { httpServer } from './app';
+import { initSocket } from './socket';
 
-const PORT = parseInt(process.env.PORT ?? '3000', 10)
+const PORT = parseInt(process.env.PORT ?? '3000', 10);
 
-initSocket(httpServer)
+initSocket(httpServer);
 
 httpServer.listen(PORT, () => {
-  console.log(`OniClaude API corriendo en http://localhost:${PORT}`)
-})
+  console.log(`OniClaude API corriendo en http://localhost:${PORT}`);
+});
