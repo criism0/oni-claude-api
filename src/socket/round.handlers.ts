@@ -60,6 +60,10 @@ export function clearRound(roundId: string): void {
   }
 }
 
+export function getSocketRoundIds(socketId: string): Set<string> {
+  return socketRounds.get(socketId) ?? new Set()
+}
+
 export function clearSocketRounds(socketId: string): void {
   const rounds = socketRounds.get(socketId)
   if (rounds) {

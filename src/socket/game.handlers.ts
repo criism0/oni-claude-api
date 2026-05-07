@@ -1,5 +1,5 @@
 import type { AppServer, AppSocket } from './types'
-import { startRound, clearRound } from './round.handlers'
+import { startRound, clearRound, getSocketRoundIds } from './round.handlers'
 
 // gameId → roundIds activos (para limpieza en game:end)
 const gameRounds = new Map<string, Set<string>>()
@@ -24,6 +24,18 @@ export function registerGameHandlers(io: AppServer, socket: AppSocket): void {
       durationSec: 30,
       totalRounds: 1,
     })
+  })
+
+  socket.on('disconnect', () => {
+    const socketRoundIds = getSocketRoundIds(socket.id)
+    for (const [gameId, roundSet] of gameRounds) {
+      for (const roundId of roundSet) {
+        if (socketRoundIds.has(roundId)) {
+          gameRounds.delete(gameId)
+          break
+        }
+      }
+    }
   })
 
   socket.on('game:end', ({ gameId }) => {
