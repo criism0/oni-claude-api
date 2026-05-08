@@ -1,0 +1,7 @@
+-- CreateEnum
+CREATE TYPE "ModoRevelacion" AS ENUM ('PROGRESIVO', 'CUADROS', 'IZQUIERDA');
+
+-- AlterTable
+ALTER TABLE "Room" ADD COLUMN     "duracionRonda" INTEGER NOT NULL DEFAULT 30,
+ADD COLUMN     "modoRevelacion" "ModoRevelacion" NOT NULL DEFAULT 'PROGRESIVO',
+ADD COLUMN     "nRondas" INTEGER NOT NULL DEFAULT 5;

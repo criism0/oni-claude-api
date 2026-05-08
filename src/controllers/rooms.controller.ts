@@ -1,6 +1,9 @@
 import { Request, Response, NextFunction } from 'express';
+import { ModoRevelacion } from '@prisma/client';
 import { prisma } from '../lib/prisma';
 import { AppError } from '../lib/errors';
+
+const VALID_MODOS = Object.values(ModoRevelacion);
 
 function generateCode(): string {
   const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
@@ -12,10 +15,28 @@ function generateCode(): string {
 
 export async function createRoom(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
-    const { name, maxPlayers } = req.body as { name?: string; maxPlayers?: number };
+    const { name, maxPlayers, nRondas, duracionRonda, modoRevelacion } = req.body as {
+      name?: string;
+      maxPlayers?: number;
+      nRondas?: number;
+      duracionRonda?: number;
+      modoRevelacion?: string;
+    };
 
     if (!name) {
       throw new AppError(400, 'name es requerido');
+    }
+
+    if (nRondas !== undefined && (nRondas < 1 || nRondas > 20)) {
+      throw new AppError(400, 'nRondas debe estar entre 1 y 20');
+    }
+
+    if (duracionRonda !== undefined && (duracionRonda < 10 || duracionRonda > 120)) {
+      throw new AppError(400, 'duracionRonda debe estar entre 10 y 120 segundos');
+    }
+
+    if (modoRevelacion !== undefined && !VALID_MODOS.includes(modoRevelacion as ModoRevelacion)) {
+      throw new AppError(400, `modoRevelacion debe ser uno de: ${VALID_MODOS.join(', ')}`);
     }
 
     let code = generateCode();
@@ -26,7 +47,15 @@ export async function createRoom(req: Request, res: Response, next: NextFunction
     }
 
     const room = await prisma.room.create({
-      data: { code, name, maxPlayers: maxPlayers ?? 8, ownerId: req.user!.userId },
+      data: {
+        code,
+        name,
+        maxPlayers: maxPlayers ?? 8,
+        nRondas: nRondas ?? 5,
+        duracionRonda: duracionRonda ?? 30,
+        modoRevelacion: (modoRevelacion as ModoRevelacion) ?? ModoRevelacion.PROGRESIVO,
+        ownerId: req.user!.userId,
+      },
     });
 
     res.status(201).json({ room });

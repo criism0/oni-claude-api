@@ -20,16 +20,25 @@ model User {
 }
 
 model Room {
-  id         String   @id @default(cuid())
-  code       String   @unique
-  name       String
-  maxPlayers Int      @default(8)
-  ownerId    String
-  owner      User     @relation("RoomOwner", fields: [ownerId], references: [id])
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
+  id             String          @id @default(cuid())
+  code           String          @unique
+  name           String
+  maxPlayers     Int             @default(8)
+  nRondas        Int             @default(5)
+  duracionRonda  Int             @default(30)
+  modoRevelacion ModoRevelacion  @default(PROGRESIVO)
+  ownerId        String
+  owner          User            @relation("RoomOwner", fields: [ownerId], references: [id])
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
 
   games Game[]
+}
+
+enum ModoRevelacion {
+  PROGRESIVO
+  CUADROS
+  IZQUIERDA
 }
 
 model Game {

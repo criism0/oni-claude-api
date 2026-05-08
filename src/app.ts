@@ -6,6 +6,7 @@ import authRoutes from './routes/auth.routes';
 import roomRoutes from './routes/rooms.routes';
 import gameRoutes from './routes/games.routes';
 import roundRoutes from './routes/rounds.routes';
+import animeRoutes from './routes/animes.routes';
 import { authMiddleware } from './middleware/auth.middleware';
 import { errorMiddleware } from './middleware/error.middleware';
 
@@ -28,6 +29,7 @@ app.use('/api/auth', authRoutes);
 app.use('/api/rooms', authMiddleware, roomRoutes);
 app.use('/api/games', authMiddleware, gameRoutes);
 app.use('/api/rounds', authMiddleware, roundRoutes);
+app.use('/api/animes', authMiddleware, animeRoutes);
 
 // Centralized error handler (must be last middleware)
 app.use(errorMiddleware);
