@@ -27,6 +27,8 @@ model Room {
   nRondas        Int             @default(5)
   duracionRonda  Int             @default(30)
   modoRevelacion ModoRevelacion  @default(PROGRESIVO)
+  genreId        Int?
+  decade         Int?
   ownerId        String
   owner          User            @relation("RoomOwner", fields: [ownerId], references: [id])
   createdAt      DateTime        @default(now())

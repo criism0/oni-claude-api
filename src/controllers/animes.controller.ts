@@ -1,5 +1,19 @@
 import { Request, Response, NextFunction } from 'express';
 import { AppError } from '../lib/errors';
+import { countAnimePool } from '../lib/shikimori';
+
+export async function checkAnimes(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const { genreId, decade, needed } = req.query as Record<string, string>;
+    const count = await countAnimePool(
+      genreId ? parseInt(genreId) : null,
+      decade ? parseInt(decade) : null,
+    );
+    res.json({ count, enough: count >= (parseInt(needed) || 1) });
+  } catch (err) {
+    next(err);
+  }
+}
 
 const SHIKIMORI_BASE = 'https://shikimori.one/api';
 const SHIKIMORI_ORIGIN = 'https://shikimori.one';

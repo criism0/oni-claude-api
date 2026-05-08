@@ -15,16 +15,23 @@ function generateCode(): string {
 
 export async function createRoom(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
-    const { name, maxPlayers, nRondas, duracionRonda, modoRevelacion } = req.body as {
-      name?: string;
-      maxPlayers?: number;
-      nRondas?: number;
-      duracionRonda?: number;
-      modoRevelacion?: string;
-    };
+    const { name, maxPlayers, nRondas, duracionRonda, modoRevelacion, genreId, decade } =
+      req.body as {
+        name?: string;
+        maxPlayers?: number;
+        nRondas?: number;
+        duracionRonda?: number;
+        modoRevelacion?: string;
+        genreId?: number;
+        decade?: number;
+      };
 
     if (!name) {
       throw new AppError(400, 'name es requerido');
+    }
+
+    if (maxPlayers !== undefined && (maxPlayers < 2 || maxPlayers > 8)) {
+      throw new AppError(400, 'maxPlayers debe estar entre 2 y 8');
     }
 
     if (nRondas !== undefined && (nRondas < 1 || nRondas > 20)) {
@@ -54,6 +61,8 @@ export async function createRoom(req: Request, res: Response, next: NextFunction
         nRondas: nRondas ?? 5,
         duracionRonda: duracionRonda ?? 30,
         modoRevelacion: (modoRevelacion as ModoRevelacion) ?? ModoRevelacion.PROGRESIVO,
+        genreId: genreId ?? null,
+        decade: decade ?? null,
         ownerId: req.user!.userId,
       },
     });

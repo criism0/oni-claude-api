@@ -1,50 +1,40 @@
 import { Request, Response, NextFunction } from 'express';
 import { prisma } from '../lib/prisma';
 import { AppError } from '../lib/errors';
-
-interface RoundInput {
-  animeId: number;
-  animeTitle: string;
-  imageUrls: string[];
-}
+import { fetchAnimePool, fetchScreenshots } from '../lib/shikimori';
 
 export async function createGame(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
-    const { roomId, rounds } = req.body as { roomId?: string; rounds?: RoundInput[] };
+    const { roomId } = req.body as { roomId?: string };
 
-    if (!roomId) {
-      throw new AppError(400, 'roomId es requerido');
-    }
-
-    if (!Array.isArray(rounds) || rounds.length === 0) {
-      throw new AppError(400, 'rounds debe ser un array no vacío');
-    }
+    if (!roomId) throw new AppError(400, 'roomId es requerido');
 
     const room = await prisma.room.findUnique({ where: { id: roomId } });
-
-    if (!room) {
-      throw new AppError(404, 'Sala no encontrada');
-    }
-
-    if (room.ownerId !== req.user!.userId) {
+    if (!room) throw new AppError(404, 'Sala no encontrada');
+    if (room.ownerId !== req.user!.userId)
       throw new AppError(403, 'Solo el dueño de la sala puede crear partidas');
+
+    const pool = await fetchAnimePool(room.genreId, room.decade, room.nRondas);
+    if (pool.length < room.nRondas) {
+      throw new AppError(
+        422,
+        `No hay suficientes animes con esos filtros (${pool.length} encontrados, ${room.nRondas} necesarios).`,
+      );
     }
+
+    const selected = pool.slice(0, room.nRondas);
+
+    const rounds = await Promise.all(
+      selected.map(async (anime, index) => {
+        const fallback = `https://shikimori.one${anime.image.preview}`;
+        const imageUrls = await fetchScreenshots(anime.id, fallback);
+        return { animeId: anime.id, animeTitle: anime.name, imageUrls, order: index + 1 };
+      }),
+    );
 
     const game = await prisma.game.create({
-      data: {
-        roomId,
-        rounds: {
-          create: rounds.map((r, index) => ({
-            animeId: r.animeId,
-            animeTitle: r.animeTitle,
-            imageUrls: r.imageUrls,
-            order: index + 1,
-          })),
-        },
-      },
-      include: {
-        rounds: { orderBy: { order: 'asc' } },
-      },
+      data: { roomId, rounds: { create: rounds } },
+      include: { rounds: { orderBy: { order: 'asc' } } },
     });
 
     res.status(201).json({ game });
@@ -56,7 +46,6 @@ export async function createGame(req: Request, res: Response, next: NextFunction
 export async function getGame(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
     const { id } = req.params;
-
     const game = await prisma.game.findUnique({
       where: { id },
       include: {
@@ -67,11 +56,7 @@ export async function getGame(req: Request, res: Response, next: NextFunction): 
         },
       },
     });
-
-    if (!game) {
-      throw new AppError(404, 'Partida no encontrada');
-    }
-
+    if (!game) throw new AppError(404, 'Partida no encontrada');
     res.json({ game });
   } catch (err) {
     next(err);
@@ -81,29 +66,17 @@ export async function getGame(req: Request, res: Response, next: NextFunction): 
 export async function startGame(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
     const { id } = req.params;
-
-    const game = await prisma.game.findUnique({
-      where: { id },
-      include: { room: true },
-    });
-
-    if (!game) {
-      throw new AppError(404, 'Partida no encontrada');
-    }
-
-    if (game.room.ownerId !== req.user!.userId) {
+    const game = await prisma.game.findUnique({ where: { id }, include: { room: true } });
+    if (!game) throw new AppError(404, 'Partida no encontrada');
+    if (game.room.ownerId !== req.user!.userId)
       throw new AppError(403, 'Solo el dueño de la sala puede iniciar la partida');
-    }
-
-    if (game.status !== 'WAITING') {
+    if (game.status !== 'WAITING')
       throw new AppError(400, `No se puede iniciar una partida en estado ${game.status}`);
-    }
 
     const updated = await prisma.game.update({
       where: { id },
       data: { status: 'IN_PROGRESS', startedAt: new Date() },
     });
-
     res.json({ game: updated });
   } catch (err) {
     next(err);
