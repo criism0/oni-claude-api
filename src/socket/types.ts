@@ -9,6 +9,9 @@ export interface ScoreSummary {
 export interface ServerToClientEvents {
   'room:joined': (payload: { userId: string; username: string }) => void
   'room:left': (payload: { userId: string; username: string }) => void
+  'room:players': (payload: { players: Array<{ userId: string; username: string }> }) => void
+  'room:full': () => void
+  'room:error': (payload: { code: string }) => void
   'game:started': (payload: { gameId: string }) => void
   'game:ended': (payload: { gameId: string; scores: ScoreSummary[] }) => void
   'round:start': (payload: {
