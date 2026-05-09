@@ -1,6 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import { AppError } from '../lib/errors';
-import { countAnimePool } from '../lib/shikimori';
+import { countAnimePool, BASE, HEADERS } from '../lib/shikimori';
 
 export async function checkAnimes(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
@@ -15,12 +15,10 @@ export async function checkAnimes(req: Request, res: Response, next: NextFunctio
   }
 }
 
-const SHIKIMORI_BASE = 'https://shikimori.one/api';
 const SHIKIMORI_ORIGIN = 'https://shikimori.one';
-const HEADERS = { 'User-Agent': 'OniClaude/1.0' };
 
 async function shikiGet(path: string): Promise<unknown> {
-  const res = await fetch(`${SHIKIMORI_BASE}${path}`, { headers: HEADERS });
+  const res = await fetch(`${BASE}${path}`, { headers: HEADERS });
   if (!res.ok) throw new AppError(502, 'Error al consultar Shikimori');
   return res.json();
 }

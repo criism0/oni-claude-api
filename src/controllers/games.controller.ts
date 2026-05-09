@@ -14,6 +14,11 @@ export async function createGame(req: Request, res: Response, next: NextFunction
     if (room.ownerId !== req.user!.userId)
       throw new AppError(403, 'Solo el dueño de la sala puede crear partidas');
 
+    const existingGame = await prisma.game.findFirst({
+      where: { roomId, status: { in: ['WAITING', 'IN_PROGRESS'] } },
+    });
+    if (existingGame) throw new AppError(409, 'Ya existe una partida activa para esta sala');
+
     const pool = await fetchAnimePool(room.genreId, room.decade, room.nRondas);
     if (pool.length < room.nRondas) {
       throw new AppError(

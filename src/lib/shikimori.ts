@@ -1,5 +1,5 @@
-const BASE = 'https://shikimori.one/api';
-const HEADERS = { 'User-Agent': 'OniClaude/1.0' };
+export const BASE = 'https://shikimori.one/api';
+export const HEADERS = { 'User-Agent': 'OniClaude/1.0' };
 
 export interface ShikimoriAnime {
   id: number;
@@ -75,7 +75,7 @@ export async function fetchAnimePool(
 
   // Intento 3: sin filtros
   if (genreId !== null) {
-    const extraPages = await Promise.all(pages.slice(0, 3).map((p) => fetchPage(null, p)));
+    const extraPages = await Promise.all(pages.slice(3).map((p) => fetchPage(null, p)));
     pool = dedup([...pool, ...extraPages.flat()]);
   }
 
@@ -98,7 +98,8 @@ export async function fetchScreenshots(animeId: number, fallback: string): Promi
     const res = await fetch(`${BASE}/animes/${animeId}/screenshots`, { headers: HEADERS });
     if (!res.ok) return [fallback];
     const data = (await res.json()) as Array<{ original: string; preview: string }>;
-    const urls = data.slice(0, 4).map((s) => `https://shikimori.one${s.preview}`);
+    // TODO: evaluar calidad al implementar rondas — preview puede ser baja resolución, considerar s.original
+    const urls = shuffle(data).slice(0, 4).map((s) => `https://shikimori.one${s.preview}`);
     return urls.length ? urls : [fallback];
   } catch {
     return [fallback];
