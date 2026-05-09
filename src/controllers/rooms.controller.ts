@@ -95,6 +95,32 @@ export async function getRoom(req: Request, res: Response, next: NextFunction): 
   }
 }
 
+export async function getRoomByCode(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const { code } = req.params
+
+    const room = await prisma.room.findUnique({
+      where: { code },
+      include: {
+        owner: { select: { id: true, username: true } },
+        games: {
+          select: { id: true, status: true, createdAt: true },
+          orderBy: { createdAt: 'desc' },
+          take: 1,
+        },
+      },
+    })
+
+    if (!room) {
+      throw new AppError(404, 'Sala no encontrada')
+    }
+
+    res.json({ room })
+  } catch (err) {
+    next(err)
+  }
+}
+
 export async function deleteRoom(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
     const { id } = req.params;
