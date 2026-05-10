@@ -16,6 +16,29 @@ const roundStartTime = new Map<string, number>()   // roundId → start timestam
 const roundRevealLevel = new Map<string, number>() // roundId → current reveal %
 const roundDuration = new Map<string, number>()    // roundId → durationSec
 
+type Hint = { type: 'year' | 'episodes' | 'title'; value: string }
+const roundHints = new Map<string, Hint[]>()             // roundId → hints emitidos hasta ahora
+const roundPrecomputedHints = new Map<string, Hint[]>()  // roundId → [year, episodes, title] pre-calculados
+
+function buildHints(animeTitle: string, year: number | null, episodes: number | null): Hint[] {
+  const yearHint: Hint = { type: 'year', value: year != null ? String(year) : '???' }
+  const episodesHint: Hint = { type: 'episodes', value: episodes != null ? String(episodes) : '???' }
+
+  const chars = animeTitle.split('')
+  const nonSpaceIndices = chars.map((c, i) => (c !== ' ' ? i : -1)).filter((i) => i !== -1)
+  const revealCount = Math.max(1, Math.ceil(nonSpaceIndices.length * 0.1))
+  const arr = [...nonSpaceIndices]
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1))
+    ;[arr[i], arr[j]] = [arr[j], arr[i]]
+  }
+  const revealedSet = new Set(arr.slice(0, revealCount))
+  const masked = chars.map((c, i) => (c === ' ' ? ' ' : revealedSet.has(i) ? c : '_')).join('')
+
+  const titleHint: Hint = { type: 'title', value: masked }
+  return [yearHint, episodesHint, titleHint]
+}
+
 // Formula de puntos: timeBonus (basado en qué tan rapido respondió el jugador)
 // + revealBonus (basado en qué tan poco de la imagen se reveló)
 function calculatePoints(timeRemaining: number, durationSec: number, revealLevel: number): number {
@@ -45,6 +68,30 @@ export async function startRound(
   if (roundTimers.has(roundId)) return
   roundTimers.set(roundId, [])
 
+  roundHints.set(roundId, [])
+
+  const roundData = await prisma.round.findUnique({
+    where: { id: roundId },
+    select: { animeTitle: true, year: true, episodes: true },
+  })
+  roundPrecomputedHints.set(
+    roundId,
+    roundData
+      ? buildHints(roundData.animeTitle, roundData.year, roundData.episodes)
+      : [
+          { type: 'year', value: '???' },
+          { type: 'episodes', value: '???' },
+          { type: 'title', value: '???' },
+        ],
+  )
+
+  // Guard: clearRound may have been called while we awaited the DB
+  if (!roundTimers.has(roundId)) {
+    roundPrecomputedHints.delete(roundId)
+    roundHints.delete(roundId)
+    return
+  }
+
   const sockets = await io.in(roomId).fetchSockets()
   const pending = new Set(sockets.map((s) => s.data.user.userId))
 
@@ -67,19 +114,29 @@ export async function startRound(
   const checkpoints = [0.25, 0.5, 0.75, 1.0]
   const timers: NodeJS.Timeout[] = []
 
-  checkpoints.forEach((pct) => {
-    const timer = setTimeout(async () => {
-      const percent = Math.round(pct * 100)
+  const hintByPct = new Map<number, number>([
+    [0.25, 0],
+    [0.5, 1],
+    [0.75, 2],
+  ])
 
+  checkpoints.forEach((pct) => {
+    const timer = setTimeout(() => {
+      const percent = Math.round(pct * 100)
       roundRevealLevel.set(roundId, percent)
       io.to(roomId).emit('round:reveal', { roundId, percent })
 
+      const hintIndex = hintByPct.get(pct)
+      if (hintIndex !== undefined) {
+        const hint = roundPrecomputedHints.get(roundId)?.[hintIndex]
+        if (hint) {
+          roundHints.get(roundId)?.push(hint)
+          io.to(roomId).emit('round:hint', { roundId, ...hint })
+        }
+      }
+
       if (pct === 1.0) {
-        const round = await prisma.round.findUnique({
-          where: { id: roundId },
-          select: { animeTitle: true },
-        })
-        io.to(roomId).emit('round:timeout', { roundId, animeTitle: round?.animeTitle ?? '' })
+        io.to(roomId).emit('round:timeout', { roundId, animeTitle: roundData?.animeTitle ?? '' })
         clearRound(roundId, onEnd)
       }
     }, durationSec * 1000 * pct)
@@ -108,6 +165,8 @@ export function clearRound(roundId: string, onEnd?: () => void): void {
   roundStartTime.delete(roundId)
   roundRevealLevel.delete(roundId)
   roundDuration.delete(roundId)
+  roundHints.delete(roundId)
+  roundPrecomputedHints.delete(roundId)
 
   for (const [socketId, rounds] of socketRounds) {
     rounds.delete(roundId)
@@ -152,6 +211,15 @@ export function clearSocketRounds(socketId: string): void {
       clearRound(roundId)
     }
     socketRounds.delete(socketId)
+  }
+}
+
+export function emitCatchupHints(socket: AppSocket, roomId: string): void {
+  const roundId = roomActiveRound.get(roomId)
+  if (!roundId) return
+  const accumulated = roundHints.get(roundId) ?? []
+  for (const hint of accumulated) {
+    socket.emit('round:hint', { roundId, ...hint })
   }
 }
 
