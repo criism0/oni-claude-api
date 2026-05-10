@@ -6,16 +6,34 @@ const roundTimers = new Map<string, NodeJS.Timeout[]>()
 const roundRoom = new Map<string, string>()
 // socketId → roundIds iniciados por ese socket (para limpieza en disconnect)
 const socketRounds = new Map<string, Set<string>>()
+// roundId → users que han acertado (para evitar repetir)
+const roundCorrect = new Map<string, Set<string>>()
+// roundId → users que no han acertado (para emitir timeout)
+const roundPending = new Map<string, Set<string>>()
+// roomId → roundId activo (para evitar multiples rondas)
+const roomActiveRound = new Map<string, string>()
 
-export function startRound(
+export async function startRound(
   io: AppServer,
   socketId: string,
   roomId: string,
-  params: { roundId: string; order: number; durationSec: number; totalRounds: number },
-): void {
+  params: {
+    roundId: string
+    order: number
+    durationSec: number
+    totalRounds: number
+  },
+  onEnd?: () => void,
+): Promise<void> {
   const { roundId, order, durationSec, totalRounds } = params
 
+  const sockets = await io.in(roomId).fetchSockets()
+  const pending = new Set(sockets.map((s) => s.data.user.userId))
+
   roundRoom.set(roundId, roomId)
+  roundCorrect.set(roundId, new Set())
+  roundPending.set(roundId, pending)
+  roomActiveRound.set(roomId, roundId)
 
   const tracked = socketRounds.get(socketId) ?? new Set<string>()
   tracked.add(roundId)
@@ -34,9 +52,9 @@ export function startRound(
       io.to(roomId).emit('round:reveal', { roundId, percent })
 
       if (pct === 1.0) {
-        // TODO: conectar con lógica de rondas — leer animeTitle de DB (Round.animeTitle)
+        // TODO: leer animeTitle de DB (Round.animeTitle)
         io.to(roomId).emit('round:timeout', { roundId, animeTitle: '' })
-        clearRound(roundId)
+        clearRound(roundId, onEnd)
       }
     }, durationSec * 1000 * pct)
 
@@ -46,17 +64,48 @@ export function startRound(
   roundTimers.set(roundId, timers)
 }
 
-export function clearRound(roundId: string): void {
+export function clearRound(roundId: string, onEnd?: () => void): void {
   const timers = roundTimers.get(roundId)
   if (timers) {
     timers.forEach(clearTimeout)
     roundTimers.delete(roundId)
   }
-  roundRoom.delete(roundId)
+
+  const roomId = roundRoom.get(roundId)
+  if (roomId) {
+    roomActiveRound.delete(roomId)
+    roundRoom.delete(roundId)
+  }
+
+  roundCorrect.delete(roundId)
+  roundPending.delete(roundId)
 
   for (const [socketId, rounds] of socketRounds) {
     rounds.delete(roundId)
     if (rounds.size === 0) socketRounds.delete(socketId)
+  }
+
+  onEnd?.()
+}
+
+export function onPlayerJoin(roomId: string, userId: string): void {
+  const roundId = roomActiveRound.get(roomId)
+  if (!roundId) return
+  if (!roundCorrect.get(roundId)?.has(userId)) {
+    roundPending.get(roundId)?.add(userId)
+  }
+}
+
+export function onPlayerLeave(io: AppServer, roomId: string, userId: string): void {
+  const roundId = roomActiveRound.get(roomId)
+  if (!roundId) return
+
+  roundPending.get(roundId)?.delete(userId)
+
+  if (roundPending.get(roundId)?.size === 0) {
+    // TODO: leer animeTitle de DB
+    io.to(roomId).emit('round:timeout', { roundId, animeTitle: '' })
+    clearRound(roundId)
   }
 }
 
@@ -80,12 +129,28 @@ export function registerRoundHandlers(io: AppServer, socket: AppSocket): void {
     if (!roomId) return
     if (!socket.rooms.has(roomId)) return
 
-    clearRound(roundId)
-
-    // TODO: conectar con lógica de rondas — validar con isCloseEnough() (src/lib/levenshtein.ts) y persistir Score en DB
-    // No reimplementar la lógica — extraer la función core de src/controllers/rounds.controller.ts
     const { userId, username } = socket.data.user
-    io.to(roomId).emit('round:correct', { roundId, userId, username, points: 100 })
+
+    if (roundCorrect.get(roundId)?.has(userId)) return
+    if (!roundPending.get(roundId)?.has(userId)) return
+
+    // TODO: validar con isCloseEnough() contra animeTitle de DB
+    const correct = true
+    if (!correct) return
+
+    roundPending.get(roundId)!.delete(userId)
+    roundCorrect.get(roundId)!.add(userId)
+
+    // TODO: calcular puntos reales (timeBonus + revealBonus)
+    const points = 100
+    // TODO: persistir Score en DB
+
+    io.to(roomId).emit('round:correct', { roundId, userId, username, points })
+    // TODO: emitir scores reales desde DB
     io.to(roomId).emit('score:update', { scores: [] })
+
+    if (roundPending.get(roundId)!.size === 0) {
+      clearRound(roundId)
+    }
   })
 }

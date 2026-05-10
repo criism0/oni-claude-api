@@ -40,11 +40,11 @@ export function registerGameHandlers(io: AppServer, socket: AppSocket): void {
       console.log(`[socket] game:start: ${username} → game ${gameId}`)
       io.to(roomId).emit('game:started', { gameId })
 
-      // TODO: reemplazar con rondas reales de DB — pendiente lógica del servidor de rondas
+      // TODO: reemplazar con rondas reales de DB
       const roundId = `${gameId}-round-1`
       gameRounds.set(gameId, new Set([roundId]))
 
-      startRound(io, socket.id, roomId, {
+      await startRound(io, socket.id, roomId, {
         roundId,
         order: 1,
         durationSec: 30,
