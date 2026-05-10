@@ -33,7 +33,12 @@ export async function createGame(req: Request, res: Response, next: NextFunction
       selected.map(async (anime, index) => {
         const fallback = `https://shikimori.one${anime.image.preview}`;
         const imageUrls = await fetchScreenshots(anime.id, fallback);
-        return { animeId: anime.id, animeTitle: anime.name, imageUrls, order: index + 1 };
+        const parsedYear = anime.aired_on ? new Date(anime.aired_on).getFullYear() : null;
+        const year = parsedYear !== null && Number.isInteger(parsedYear) && parsedYear >= 1900 && parsedYear <= 2100
+          ? parsedYear
+          : null;
+        const episodes = typeof anime.episodes === 'number' && anime.episodes > 0 ? anime.episodes : null;
+        return { animeId: anime.id, animeTitle: anime.name, imageUrls, order: index + 1, year, episodes };
       }),
     );
 

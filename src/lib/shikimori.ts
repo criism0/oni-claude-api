@@ -6,6 +6,7 @@ export interface ShikimoriAnime {
   name: string;
   aired_on: string | null;
   image: { preview: string };
+  episodes?: number;
 }
 
 function shuffle<T>(arr: T[]): T[] {
