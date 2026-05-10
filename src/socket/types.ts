@@ -14,11 +14,13 @@ export interface ServerToClientEvents {
   'room:error': (payload: { code: string }) => void
   'game:started': (payload: { gameId: string }) => void
   'game:ended': (payload: { gameId: string; scores: ScoreSummary[] }) => void
+  'game:error': (payload: { gameId: string }) => void
   'round:start': (payload: {
     roundId: string
     order: number
     durationSec: number
     totalRounds: number
+    imageUrl: string
   }) => void
   'round:reveal': (payload: { roundId: string; percent: number }) => void
   'round:correct': (payload: {
