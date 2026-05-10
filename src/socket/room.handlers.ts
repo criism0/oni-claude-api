@@ -1,10 +1,10 @@
 import { prisma } from '../lib/prisma'
 import type { AppServer, AppSocket } from './types'
-import { clearSocketRounds } from './round.handlers'
+import { clearSocketRounds, onPlayerJoin, onPlayerLeave } from './round.handlers'
 
 export function registerRoomHandlers(io: AppServer, socket: AppSocket): void {
   socket.on('room:join', async ({ roomId }) => {
-    const { username } = socket.data.user
+    const { userId, username } = socket.data.user
 
     try {
       const alreadyInRoom = socket.rooms.has(roomId)
@@ -39,6 +39,7 @@ export function registerRoomHandlers(io: AppServer, socket: AppSocket): void {
 
       if (!alreadyInRoom) {
         socket.to(roomId).emit('room:joined', socket.data.user)
+        onPlayerJoin(roomId, userId)
       }
     } catch (err) {
       console.error('[socket] room:join error:', err)
@@ -47,16 +48,18 @@ export function registerRoomHandlers(io: AppServer, socket: AppSocket): void {
   })
 
   socket.on('room:leave', ({ roomId }) => {
-    const { username } = socket.data.user
+    const { userId, username } = socket.data.user
     console.log(`[socket] room:leave: ${username} ← ${roomId}`)
     socket.leave(roomId)
     socket.to(roomId).emit('room:left', socket.data.user)
+    onPlayerLeave(io, roomId, userId)
   })
 
   socket.on('disconnecting', () => {
     for (const roomId of socket.rooms) {
       if (roomId !== socket.id) {
         socket.to(roomId).emit('room:left', socket.data.user)
+        onPlayerLeave(io, roomId, socket.data.user.userId)
       }
     }
   })
