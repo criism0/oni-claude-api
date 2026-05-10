@@ -9,6 +9,7 @@ export async function getMyGames(req: Request, res: Response, next: NextFunction
 
     const games = await prisma.game.findMany({
       where: { status: 'FINISHED', scores: { some: { userId } } },
+      take: 50,
       include: {
         room: { select: { name: true } },
         scores: { select: { userId: true, points: true } },
