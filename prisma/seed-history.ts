@@ -158,7 +158,9 @@ async function main() {
       }
     }
 
-    const userPts = fixture.players.find(p => p.userId === mainUser.id)!.pts.reduce((a, b) => a + b, 0);
+    const mainPlayerEntry = fixture.players.find(p => p.userId === mainUser.id);
+    if (!mainPlayerEntry) throw new Error(`mainUser ausente en fixture "${fixture.roomName}"`);
+    const userPts = mainPlayerEntry.pts.reduce((a, b) => a + b, 0);
     const position = fixture.players
       .map(p => ({ id: p.userId, total: p.pts.reduce((a, b) => a + b, 0) }))
       .sort((a, b) => b.total - a.total)
