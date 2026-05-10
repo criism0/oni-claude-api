@@ -156,11 +156,12 @@ export async function updateMe(req: Request, res: Response, next: NextFunction):
     const updates: { username?: string; password?: string } = {};
 
     if (wantsUsername && username!.trim() !== currentUser.username) {
+      const newUsername = username!.trim();
       const taken = await prisma.user.findFirst({
-        where: { username: username!.trim(), NOT: { id: req.user!.userId } },
+        where: { username: newUsername, NOT: { id: req.user!.userId } },
       });
       if (taken) throw new AppError(409, 'El nombre de usuario ya está en uso');
-      updates.username = username!.trim();
+      updates.username = newUsername;
     }
 
     if (wantsPassword) {
@@ -171,14 +172,14 @@ export async function updateMe(req: Request, res: Response, next: NextFunction):
     }
 
     if (Object.keys(updates).length === 0) {
-      res.json({ user: { id: currentUser.id, username: currentUser.username, email: currentUser.email } });
+      res.json({ user: { id: currentUser.id, username: currentUser.username, email: currentUser.email, createdAt: currentUser.createdAt } });
       return;
     }
 
     const updated = await prisma.user.update({
       where: { id: req.user!.userId },
       data: updates,
-      select: { id: true, username: true, email: true },
+      select: { id: true, username: true, email: true, createdAt: true },
     });
 
     // Re-emitir cookie si el username cambió (el JWT contiene username)
