@@ -136,6 +136,13 @@ export async function updateMe(req: Request, res: Response, next: NextFunction):
       throw new AppError(400, 'Se requiere al menos un campo para actualizar');
     }
 
+    if (wantsUsername) {
+      const len = username!.trim().length;
+      if (len < 3 || len > 20) {
+        throw new AppError(400, 'El nombre de usuario debe tener entre 3 y 20 caracteres');
+      }
+    }
+
     const currentUser = await prisma.user.findUnique({ where: { id: req.user!.userId } });
     if (!currentUser) throw new AppError(404, 'Usuario no encontrado');
 
