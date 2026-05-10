@@ -3,6 +3,45 @@ import { prisma } from '../lib/prisma';
 import { AppError } from '../lib/errors';
 import { fetchAnimePool, fetchScreenshots } from '../lib/shikimori';
 
+export async function getMyGames(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const { userId } = req.user!;
+
+    const games = await prisma.game.findMany({
+      where: { status: 'FINISHED', scores: { some: { userId } } },
+      include: {
+        room: { select: { name: true } },
+        scores: { select: { userId: true, points: true } },
+        _count: { select: { rounds: true } },
+      },
+      orderBy: { endedAt: 'desc' },
+    });
+
+    const history = games.map((game) => {
+      const totals = new Map<string, number>();
+      for (const s of game.scores) {
+        totals.set(s.userId, (totals.get(s.userId) ?? 0) + s.points);
+      }
+      const sorted = [...totals.entries()].sort((a, b) => b[1] - a[1]);
+      const position = sorted.findIndex(([id]) => id === userId) + 1;
+
+      return {
+        id: game.id,
+        roomName: game.room.name,
+        endedAt: game.endedAt,
+        totalPoints: totals.get(userId) ?? 0,
+        position,
+        totalPlayers: totals.size,
+        rounds: game._count.rounds,
+      };
+    });
+
+    res.json({ games: history });
+  } catch (err) {
+    next(err);
+  }
+}
+
 export async function createGame(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
     const { roomId } = req.body as { roomId?: string };
