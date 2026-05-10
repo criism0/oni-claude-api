@@ -1,17 +1,29 @@
+import { prisma } from '../lib/prisma'
+import { isCloseEnough } from '../lib/levenshtein'
+import { fetchGameScores } from '../lib/scores'
 import type { AppServer, AppSocket } from './types'
 
-// roundId → timers activos
+// -- Maps existentes --
 const roundTimers = new Map<string, NodeJS.Timeout[]>()
-// roundId → roomId (para broadcast en round:guess)
 const roundRoom = new Map<string, string>()
-// socketId → roundIds iniciados por ese socket (para limpieza en disconnect)
 const socketRounds = new Map<string, Set<string>>()
-// roundId → users que han acertado (para evitar repetir)
 const roundCorrect = new Map<string, Set<string>>()
-// roundId → users que no han acertado (para emitir timeout)
 const roundPending = new Map<string, Set<string>>()
-// roomId → roundId activo (para evitar multiples rondas)
 const roomActiveRound = new Map<string, string>()
+
+// ── Maps nuevos: tracking de tiempo y revelación para cálculo de puntos --
+const roundStartTime = new Map<string, number>()   // roundId → start timestamp
+const roundRevealLevel = new Map<string, number>() // roundId → current reveal %
+const roundDuration = new Map<string, number>()    // roundId → durationSec
+
+// Formula de puntos: timeBonus (basado en qué tan rapido respondió el jugador)
+// + revealBonus (basado en qué tan poco de la imagen se reveló)
+function calculatePoints(timeRemaining: number, durationSec: number, revealLevel: number): number {
+  const timeBonus = Math.max(10, Math.round((100 * timeRemaining) / durationSec))
+  const revealBonus =
+    revealLevel <= 0 ? 75 : revealLevel <= 25 ? 50 : revealLevel <= 50 ? 25 : 0
+  return timeBonus + revealBonus
+}
 
 export async function startRound(
   io: AppServer,
@@ -22,10 +34,16 @@ export async function startRound(
     order: number
     durationSec: number
     totalRounds: number
+    imageUrl: string
   },
   onEnd?: () => void,
 ): Promise<void> {
-  const { roundId, order, durationSec, totalRounds } = params
+  const { roundId, order, durationSec, totalRounds, imageUrl } = params
+
+  // Sentinel: prevent duplicate concurrent startRound calls for the same round,
+  // set synchronously before any await.
+  if (roundTimers.has(roundId)) return
+  roundTimers.set(roundId, [])
 
   const sockets = await io.in(roomId).fetchSockets()
   const pending = new Set(sockets.map((s) => s.data.user.userId))
@@ -35,25 +53,33 @@ export async function startRound(
   roundPending.set(roundId, pending)
   roomActiveRound.set(roomId, roundId)
 
+  // tracking para checkpoints y cálculo de puntos
+  roundStartTime.set(roundId, Date.now())
+  roundRevealLevel.set(roundId, 0)
+  roundDuration.set(roundId, durationSec)
+
   const tracked = socketRounds.get(socketId) ?? new Set<string>()
   tracked.add(roundId)
   socketRounds.set(socketId, tracked)
 
-  if (roundTimers.has(roundId)) return
-
-  io.to(roomId).emit('round:start', { roundId, order, durationSec, totalRounds })
+  io.to(roomId).emit('round:start', { roundId, order, durationSec, totalRounds, imageUrl })
 
   const checkpoints = [0.25, 0.5, 0.75, 1.0]
   const timers: NodeJS.Timeout[] = []
 
   checkpoints.forEach((pct) => {
-    const timer = setTimeout(() => {
+    const timer = setTimeout(async () => {
       const percent = Math.round(pct * 100)
+
+      roundRevealLevel.set(roundId, percent)
       io.to(roomId).emit('round:reveal', { roundId, percent })
 
       if (pct === 1.0) {
-        // TODO: leer animeTitle de DB (Round.animeTitle)
-        io.to(roomId).emit('round:timeout', { roundId, animeTitle: '' })
+        const round = await prisma.round.findUnique({
+          where: { id: roundId },
+          select: { animeTitle: true },
+        })
+        io.to(roomId).emit('round:timeout', { roundId, animeTitle: round?.animeTitle ?? '' })
         clearRound(roundId, onEnd)
       }
     }, durationSec * 1000 * pct)
@@ -79,6 +105,9 @@ export function clearRound(roundId: string, onEnd?: () => void): void {
 
   roundCorrect.delete(roundId)
   roundPending.delete(roundId)
+  roundStartTime.delete(roundId)
+  roundRevealLevel.delete(roundId)
+  roundDuration.delete(roundId)
 
   for (const [socketId, rounds] of socketRounds) {
     rounds.delete(roundId)
@@ -96,15 +125,18 @@ export function onPlayerJoin(roomId: string, userId: string): void {
   }
 }
 
-export function onPlayerLeave(io: AppServer, roomId: string, userId: string): void {
+export async function onPlayerLeave(io: AppServer, roomId: string, userId: string): Promise<void> {
   const roundId = roomActiveRound.get(roomId)
   if (!roundId) return
 
   roundPending.get(roundId)?.delete(userId)
 
   if (roundPending.get(roundId)?.size === 0) {
-    // TODO: leer animeTitle de DB
-    io.to(roomId).emit('round:timeout', { roundId, animeTitle: '' })
+    const round = await prisma.round.findUnique({
+      where: { id: roundId },
+      select: { animeTitle: true },
+    })
+    io.to(roomId).emit('round:timeout', { roundId, animeTitle: round?.animeTitle ?? '' })
     clearRound(roundId)
   }
 }
@@ -124,7 +156,7 @@ export function clearSocketRounds(socketId: string): void {
 }
 
 export function registerRoundHandlers(io: AppServer, socket: AppSocket): void {
-  socket.on('round:guess', ({ roundId, guess: _guess }) => {
+  socket.on('round:guess', async ({ roundId, guess }) => {
     const roomId = roundRoom.get(roundId)
     if (!roomId) return
     if (!socket.rooms.has(roomId)) return
@@ -134,22 +166,47 @@ export function registerRoundHandlers(io: AppServer, socket: AppSocket): void {
     if (roundCorrect.get(roundId)?.has(userId)) return
     if (!roundPending.get(roundId)?.has(userId)) return
 
-    // TODO: validar con isCloseEnough() contra animeTitle de DB
-    const correct = true
-    if (!correct) return
-
-    roundPending.get(roundId)!.delete(userId)
+    // Reclama el slot sincrónicamente antes de cualquier await, previene race condition
+    // donde dos eventos simultáneos pasan la guard antes de que alguno actualice su estado.
     roundCorrect.get(roundId)!.add(userId)
+    roundPending.get(roundId)!.delete(userId)
 
-    // TODO: calcular puntos reales (timeBonus + revealBonus)
-    const points = 100
-    // TODO: persistir Score en DB
+    const round = await prisma.round.findUnique({
+      where: { id: roundId },
+      select: { animeTitle: true, gameId: true },
+    })
+    if (!round) {
+      // Roll back: round not found
+      roundCorrect.get(roundId)?.delete(userId)
+      roundPending.get(roundId)?.add(userId)
+      return
+    }
 
+    const correct = isCloseEnough(guess, round.animeTitle)
+    if (!correct) {
+      // Roll back: wrong answer — player puede seguir intentando
+      roundCorrect.get(roundId)?.delete(userId)
+      roundPending.get(roundId)?.add(userId)
+      return
+    }
+
+    const startTime = roundStartTime.get(roundId) ?? Date.now()
+    const durationSec = roundDuration.get(roundId) ?? 30
+    const revealLevel = roundRevealLevel.get(roundId) ?? 0
+    const timeRemaining = Math.max(0, durationSec - (Date.now() - startTime) / 1000)
+    const points = calculatePoints(timeRemaining, durationSec, revealLevel)
+
+    await prisma.score.upsert({
+      where: { userId_roundId: { userId, roundId } },
+      update: { guess, correct: true, points },
+      create: { userId, gameId: round.gameId, roundId, guess, correct: true, points },
+    })
+
+    const scores = await fetchGameScores(round.gameId)
     io.to(roomId).emit('round:correct', { roundId, userId, username, points })
-    // TODO: emitir scores reales desde DB
-    io.to(roomId).emit('score:update', { scores: [] })
+    io.to(roomId).emit('score:update', { scores })
 
-    if (roundPending.get(roundId)!.size === 0) {
+    if ((roundPending.get(roundId)?.size ?? -1) === 0) {
       clearRound(roundId)
     }
   })
