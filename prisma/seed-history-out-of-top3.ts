@@ -1,14 +1,23 @@
+/**
+ * Seed: historial de partidas fuera del top 3 (4°, 5°)
+ *
+ * Uso:
+ *   npx tsx prisma/seed-history-out-of-top3.ts <email-del-usuario>
+ *
+ * Ejemplo:
+ *   npx tsx prisma/seed-history-out-of-top3.ts crismo1712@uc.cl
+ */
 import { PrismaClient } from '@prisma/client';
 
 const prisma = new PrismaClient();
 
 const ANIMES = [
-  { id: 20,    title: 'Naruto',                             imageUrl: 'https://shikimori.one/system/animes/preview/20.jpg' },
-  { id: 21,    title: 'One Piece',                          imageUrl: 'https://shikimori.one/system/animes/preview/21.jpg' },
-  { id: 16498, title: 'Shingeki no Kyojin',                imageUrl: 'https://shikimori.one/system/animes/preview/16498.jpg' },
-  { id: 5114,  title: 'Fullmetal Alchemist: Brotherhood',  imageUrl: 'https://shikimori.one/system/animes/preview/5114.jpg' },
-  { id: 1535,  title: 'Death Note',                        imageUrl: 'https://shikimori.one/system/animes/preview/1535.jpg' },
-  { id: 11757, title: 'Sword Art Online',                  imageUrl: 'https://shikimori.one/system/animes/preview/11757.jpg' },
+  { id: 20,    title: 'Naruto',                            imageUrl: 'https://shikimori.one/system/animes/preview/20.jpg' },
+  { id: 21,    title: 'One Piece',                         imageUrl: 'https://shikimori.one/system/animes/preview/21.jpg' },
+  { id: 16498, title: 'Shingeki no Kyojin',               imageUrl: 'https://shikimori.one/system/animes/preview/16498.jpg' },
+  { id: 5114,  title: 'Fullmetal Alchemist: Brotherhood', imageUrl: 'https://shikimori.one/system/animes/preview/5114.jpg' },
+  { id: 1535,  title: 'Death Note',                       imageUrl: 'https://shikimori.one/system/animes/preview/1535.jpg' },
+  { id: 11757, title: 'Sword Art Online',                 imageUrl: 'https://shikimori.one/system/animes/preview/11757.jpg' },
 ];
 
 function daysAgo(n: number): Date {
@@ -18,9 +27,15 @@ function daysAgo(n: number): Date {
 }
 
 async function main() {
+  const email = process.argv[2];
+  if (!email) {
+    console.error('❌ Uso: npx tsx prisma/seed-history-out-of-top3.ts <email-del-usuario>');
+    process.exit(1);
+  }
+
   // ── Target user ──────────────────────────────────────────
-  const mainUser = await prisma.user.findUnique({ where: { email: 'crismo1712@uc.cl' } });
-  if (!mainUser) throw new Error('Usuario criism0x2 no encontrado. Verificar email.');
+  const mainUser = await prisma.user.findUnique({ where: { email } });
+  if (!mainUser) throw new Error(`Usuario con email "${email}" no encontrado.`);
   console.log(`✓ Usuario encontrado: ${mainUser.username} (${mainUser.id})`);
 
   // ── Competitor bots (upsert para no duplicar en re-runs) ──
@@ -87,12 +102,7 @@ async function main() {
     });
 
     const game = await prisma.game.create({
-      data: {
-        roomId: room.id,
-        status: 'FINISHED',
-        startedAt,
-        endedAt,
-      },
+      data: { roomId: room.id, status: 'FINISHED', startedAt, endedAt },
     });
 
     const rounds = await Promise.all(
@@ -131,7 +141,7 @@ async function main() {
     console.log(`✓ Juego "${fixture.roomName}" — usuario: ${userPts} pts → ${position}° de ${fixture.players.length}`);
   }
 
-  console.log('\n✅ Seed completado. 2 partidas fuera del top 3 creadas para criism0x2.');
+  console.log(`\n✅ Seed completado. 2 partidas fuera del top 3 creadas para ${mainUser.username}.`);
 }
 
 main()
