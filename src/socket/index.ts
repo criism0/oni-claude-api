@@ -44,7 +44,7 @@ export function initSocket(httpServer: HttpServer): AppServer {
     socket.on('disconnect', () => {
       console.log(`[socket] disconnected: ${socket.data.user.username} (${socket.id})`)
     })
-    registerRoomHandlers(socket)
+    registerRoomHandlers(io, socket)
     registerGameHandlers(io, socket)
     registerRoundHandlers(io, socket)
   })

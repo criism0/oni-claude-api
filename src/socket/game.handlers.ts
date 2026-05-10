@@ -1,3 +1,4 @@
+import { prisma } from '../lib/prisma'
 import type { AppServer, AppSocket } from './types'
 import { startRound, clearRound, getSocketRoundIds } from './round.handlers'
 
@@ -5,25 +6,54 @@ import { startRound, clearRound, getSocketRoundIds } from './round.handlers'
 const gameRounds = new Map<string, Set<string>>()
 
 export function registerGameHandlers(io: AppServer, socket: AppSocket): void {
-  socket.on('game:start', ({ gameId }) => {
-    // TODO: conectar con lógica de salas — validar que socket.data.user.userId sea el owner en DB
-    const activeRooms = [...socket.rooms].filter((r) => r !== socket.id)
-    const roomId = activeRooms[0]
-    if (!roomId) return
-    if (gameRounds.has(gameId)) return
+  socket.on('game:start', async ({ gameId }) => {
+    const { userId, username } = socket.data.user
 
-    io.to(roomId).emit('game:started', { gameId })
+    try {
+      if (gameRounds.has(gameId)) return
+      gameRounds.set(gameId, new Set())
 
-    // TODO: conectar con lógica de rondas — reemplazar con query a DB para obtener las rondas reales del juego
-    const roundId = `${gameId}-round-1`
-    gameRounds.set(gameId, new Set([roundId]))
+      const game = await prisma.game.findUnique({
+        where: { id: gameId },
+        include: { room: { select: { ownerId: true } } },
+      })
+      if (!game) { gameRounds.delete(gameId); return }
+      if (game.room.ownerId !== userId) {
+        console.log(`[socket] game:start blocked: ${username} is not owner of game ${gameId}`)
+        gameRounds.delete(gameId)
+        return
+      }
 
-    startRound(io, socket.id, roomId, {
-      roundId,
-      order: 1,
-      durationSec: 30,
-      totalRounds: 1,
-    })
+      const activeRooms = [...socket.rooms].filter((r) => r !== socket.id)
+      const roomId = activeRooms[0]
+      if (!roomId) { gameRounds.delete(gameId); return }
+
+      const { count } = await prisma.game.updateMany({
+        where: { id: gameId, status: 'WAITING' },
+        data: { status: 'IN_PROGRESS', startedAt: new Date() },
+      })
+      if (count === 0) {
+        gameRounds.delete(gameId)
+        return
+      }
+
+      console.log(`[socket] game:start: ${username} → game ${gameId}`)
+      io.to(roomId).emit('game:started', { gameId })
+
+      // TODO: reemplazar con rondas reales de DB — pendiente lógica del servidor de rondas
+      const roundId = `${gameId}-round-1`
+      gameRounds.set(gameId, new Set([roundId]))
+
+      startRound(io, socket.id, roomId, {
+        roundId,
+        order: 1,
+        durationSec: 30,
+        totalRounds: 1,
+      })
+    } catch (err) {
+      console.error('[socket] game:start error:', err)
+      gameRounds.delete(gameId)
+    }
   })
 
   socket.on('disconnect', () => {
