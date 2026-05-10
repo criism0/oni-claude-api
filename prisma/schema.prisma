@@ -70,6 +70,8 @@ model Round {
   animeId    Int
   animeTitle String
   imageUrls  String[]
+  year       Int?
+  episodes   Int?
   order      Int
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt

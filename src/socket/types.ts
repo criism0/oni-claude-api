@@ -23,6 +23,11 @@ export interface ServerToClientEvents {
     imageUrl: string
   }) => void
   'round:reveal': (payload: { roundId: string; percent: number }) => void
+  'round:hint': (payload: {
+    roundId: string
+    type: 'year' | 'episodes' | 'title'
+    value: string
+  }) => void
   'round:correct': (payload: {
     roundId: string
     userId: string
