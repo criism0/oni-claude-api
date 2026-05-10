@@ -46,6 +46,9 @@ export async function startRound(
   roundTimers.set(roundId, [])
 
   const sockets = await io.in(roomId).fetchSockets()
+
+  if (!roundTimers.has(roundId)) return  // clearRound was called during fetchSockets
+
   const pending = new Set(sockets.map((s) => s.data.user.userId))
 
   roundRoom.set(roundId, roomId)
@@ -206,7 +209,7 @@ export function registerRoundHandlers(io: AppServer, socket: AppSocket): void {
     io.to(roomId).emit('round:correct', { roundId, userId, username, points })
     io.to(roomId).emit('score:update', { scores })
 
-    if ((roundPending.get(roundId)?.size ?? -1) === 0) {
+    if (roundPending.get(roundId)?.size === 0) {
       clearRound(roundId)
     }
   })

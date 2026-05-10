@@ -6,6 +6,8 @@ import { fetchGameScores } from '../lib/scores'
 // gameId → roundIds activos (para limpieza en game:end)
 const gameRounds = new Map<string, Set<string>>()
 const endingGames = new Set<string>()
+// gameId → timer de transición entre rondas (5s de pausa)
+const pendingTransitions = new Map<string, NodeJS.Timeout>()
 
 type RoundRow = { id: string; order: number; imageUrls: string[]; animeTitle: string }
 
@@ -13,6 +15,8 @@ type RoundRow = { id: string; order: number; imageUrls: string[]; animeTitle: st
 async function endGame(io: AppServer, gameId: string, roomId: string): Promise<void> {
   if (endingGames.has(gameId)) return
   endingGames.add(gameId)
+  const pending = pendingTransitions.get(gameId)
+  if (pending) { clearTimeout(pending); pendingTransitions.delete(gameId) }
   try {
     await prisma.game.update({
       where: { id: gameId },
@@ -57,11 +61,13 @@ async function runRound(
       imageUrl: round.imageUrls[0] ?? '',
     },
     () => {
-      setTimeout(() => {
+      const timer = setTimeout(() => {
+        pendingTransitions.delete(gameId)
         runRound(io, socketId, roomId, gameId, rounds, index + 1, durationSec).catch(
           (err) => console.error('[socket] runRound error:', err),
         )
       }, 5000)
+      pendingTransitions.set(gameId, timer)
     },
   )
 }
@@ -126,6 +132,8 @@ export function registerGameHandlers(io: AppServer, socket: AppSocket): void {
       for (const roundId of roundSet) {
         if (socketRoundIds.has(roundId)) {
           for (const id of roundSet) clearRound(id)
+          const pending = pendingTransitions.get(gameId)
+          if (pending) { clearTimeout(pending); pendingTransitions.delete(gameId) }
           gameRounds.delete(gameId)
           break
         }
