@@ -139,6 +139,13 @@ export async function updateMe(req: Request, res: Response, next: NextFunction):
     const currentUser = await prisma.user.findUnique({ where: { id: req.user!.userId } });
     if (!currentUser) throw new AppError(404, 'Usuario no encontrado');
 
+    // Contraseña actual siempre requerida para cualquier cambio
+    if (!currentPassword) {
+      throw new AppError(400, 'Se requiere la contraseña actual para realizar cambios');
+    }
+    const valid = await bcrypt.compare(currentPassword, currentUser.password);
+    if (!valid) throw new AppError(401, 'Contraseña actual incorrecta');
+
     const updates: { username?: string; password?: string } = {};
 
     if (wantsUsername && username!.trim() !== currentUser.username) {
@@ -150,11 +157,6 @@ export async function updateMe(req: Request, res: Response, next: NextFunction):
     }
 
     if (wantsPassword) {
-      if (!currentPassword) {
-        throw new AppError(400, 'Se requiere la contraseña actual para cambiarla');
-      }
-      const valid = await bcrypt.compare(currentPassword, currentUser.password);
-      if (!valid) throw new AppError(401, 'Contraseña actual incorrecta');
       if (newPassword!.length < 8) {
         throw new AppError(400, 'La nueva contraseña debe tener al menos 8 caracteres');
       }
