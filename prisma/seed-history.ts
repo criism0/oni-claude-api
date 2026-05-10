@@ -1,5 +1,5 @@
 /**
- * Seed: historial de partidas (1°, 2° y 3° lugar)
+ * Seed: historial de partidas (top 3 y fuera del top 3)
  *
  * Uso:
  *   npx tsx prisma/seed-history.ts <email-del-usuario>
@@ -39,17 +39,13 @@ async function main() {
   console.log(`✓ Usuario encontrado: ${mainUser.username} (${mainUser.id})`);
 
   // ── Competitor bots (upsert para no duplicar en re-runs) ──
-  const botA = await prisma.user.upsert({
-    where: { email: 'bot_alpha@seed.local' },
-    update: {},
-    create: { username: 'bot_alpha', email: 'bot_alpha@seed.local', password: 'seed' },
-  });
-  const botB = await prisma.user.upsert({
-    where: { email: 'bot_beta@seed.local' },
-    update: {},
-    create: { username: 'bot_beta', email: 'bot_beta@seed.local', password: 'seed' },
-  });
-  console.log(`✓ Bots: ${botA.username}, ${botB.username}`);
+  const [botA, botB, botC, botD] = await Promise.all([
+    prisma.user.upsert({ where: { email: 'bot_alpha@seed.local' }, update: {}, create: { username: 'bot_alpha', email: 'bot_alpha@seed.local', password: 'seed' } }),
+    prisma.user.upsert({ where: { email: 'bot_beta@seed.local'  }, update: {}, create: { username: 'bot_beta',  email: 'bot_beta@seed.local',  password: 'seed' } }),
+    prisma.user.upsert({ where: { email: 'bot_gamma@seed.local' }, update: {}, create: { username: 'bot_gamma', email: 'bot_gamma@seed.local', password: 'seed' } }),
+    prisma.user.upsert({ where: { email: 'bot_delta@seed.local' }, update: {}, create: { username: 'bot_delta', email: 'bot_delta@seed.local', password: 'seed' } }),
+  ]);
+  console.log(`✓ Bots: ${botA.username}, ${botB.username}, ${botC.username}, ${botD.username}`);
 
   // ── Games data ───────────────────────────────────────────
   // Each entry: { daysAgo, roomName, players: [{userId, pts: pointsPerRound}] }
@@ -90,6 +86,29 @@ async function main() {
         { userId: mainUser.id, pts: [150, 150, 100] },   //  400 → 3°
         { userId: botA.id,     pts: [400, 400, 400] },   // 1200 → 1°
         { userId: botB.id,     pts: [300, 300, 200] },   //  800 → 2°
+      ],
+    },
+    {
+      daysAgo: 20,
+      roomName: 'Gran Torneo 🏆',
+      animes: ANIMES.slice(0, 3),
+      players: [
+        { userId: botA.id,     pts: [600, 600, 600] },   // 1800 → 1°
+        { userId: botB.id,     pts: [500, 500, 400] },   // 1400 → 2°
+        { userId: botC.id,     pts: [400, 300, 300] },   // 1000 → 3°
+        { userId: mainUser.id, pts: [200, 200, 100] },   //  500 → 4°
+      ],
+    },
+    {
+      daysAgo: 25,
+      roomName: 'Noche de Anime 🌙',
+      animes: ANIMES.slice(1, 4),
+      players: [
+        { userId: botA.id,     pts: [700, 700, 700] },   // 2100 → 1°
+        { userId: botB.id,     pts: [600, 500, 500] },   // 1600 → 2°
+        { userId: botC.id,     pts: [400, 400, 300] },   // 1100 → 3°
+        { userId: botD.id,     pts: [300, 300, 200] },   //  800 → 4°
+        { userId: mainUser.id, pts: [100, 100, 100] },   //  300 → 5°
       ],
     },
   ];
@@ -140,10 +159,14 @@ async function main() {
     }
 
     const userPts = fixture.players.find(p => p.userId === mainUser.id)!.pts.reduce((a, b) => a + b, 0);
-    console.log(`✓ Juego "${fixture.roomName}" — usuario: ${userPts} pts`);
+    const position = fixture.players
+      .map(p => ({ id: p.userId, total: p.pts.reduce((a, b) => a + b, 0) }))
+      .sort((a, b) => b.total - a.total)
+      .findIndex(p => p.id === mainUser.id) + 1;
+    console.log(`✓ "${fixture.roomName}" — ${userPts} pts → ${position}° de ${fixture.players.length}`);
   }
 
-  console.log(`\n✅ Seed completado. 4 partidas creadas para ${mainUser.username}.`);
+  console.log(`\n✅ 6 partidas creadas para ${mainUser.username} (1°, 2°, 3°, 4°, 5° cubiertos).`);
 }
 
 main()
