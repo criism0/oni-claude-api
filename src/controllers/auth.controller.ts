@@ -103,3 +103,83 @@ export async function me(req: Request, res: Response, next: NextFunction): Promi
     next(err);
   }
 }
+
+export async function checkUsername(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const { username } = req.query as { username?: string };
+    if (!username?.trim()) {
+      throw new AppError(400, 'username requerido');
+    }
+
+    const existing = await prisma.user.findFirst({
+      where: { username: username.trim(), NOT: { id: req.user!.userId } },
+    });
+
+    res.json({ available: !existing });
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function updateMe(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const { username, currentPassword, newPassword } = req.body as {
+      username?: string;
+      currentPassword?: string;
+      newPassword?: string;
+    };
+
+    const wantsUsername = Boolean(username?.trim());
+    const wantsPassword = Boolean(newPassword);
+
+    if (!wantsUsername && !wantsPassword) {
+      throw new AppError(400, 'Se requiere al menos un campo para actualizar');
+    }
+
+    const currentUser = await prisma.user.findUnique({ where: { id: req.user!.userId } });
+    if (!currentUser) throw new AppError(404, 'Usuario no encontrado');
+
+    const updates: { username?: string; password?: string } = {};
+
+    if (wantsUsername && username!.trim() !== currentUser.username) {
+      const taken = await prisma.user.findFirst({
+        where: { username: username!.trim(), NOT: { id: req.user!.userId } },
+      });
+      if (taken) throw new AppError(409, 'El nombre de usuario ya está en uso');
+      updates.username = username!.trim();
+    }
+
+    if (wantsPassword) {
+      if (!currentPassword) {
+        throw new AppError(400, 'Se requiere la contraseña actual para cambiarla');
+      }
+      const valid = await bcrypt.compare(currentPassword, currentUser.password);
+      if (!valid) throw new AppError(401, 'Contraseña actual incorrecta');
+      if (newPassword!.length < 8) {
+        throw new AppError(400, 'La nueva contraseña debe tener al menos 8 caracteres');
+      }
+      updates.password = await bcrypt.hash(newPassword!, 12);
+    }
+
+    if (Object.keys(updates).length === 0) {
+      res.json({ user: { id: currentUser.id, username: currentUser.username, email: currentUser.email } });
+      return;
+    }
+
+    const updated = await prisma.user.update({
+      where: { id: req.user!.userId },
+      data: updates,
+      select: { id: true, username: true, email: true },
+    });
+
+    // Re-emitir cookie si el username cambió (el JWT contiene username)
+    if (updates.username) {
+      const token = signToken(updated.id, updated.username);
+      res.cookie(COOKIE_NAME, token, cookieOptions());
+    }
+
+    res.json({ user: updated });
+  } catch (err) {
+    next(err);
+  }
+}
