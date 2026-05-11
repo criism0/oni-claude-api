@@ -17,6 +17,7 @@ export async function fetchEnglishTitles(malIds: number[]): Promise<Map<number, 
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
       body: JSON.stringify({ query }),
+      signal: AbortSignal.timeout(5000),
     })
 
     if (!res.ok) return new Map(safeIds.map((id) => [id, null]))
