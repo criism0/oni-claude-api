@@ -74,10 +74,13 @@ export async function fetchAnimePool(
     if (pool.length >= needed) return shuffle(pool);
   }
 
-  // Intento 3: sin filtros
-  if (genreId !== null) {
-    const extraPages = await Promise.all(pages.slice(3).map((p) => fetchPage(null, p)));
-    pool = dedup([...pool, ...extraPages.flat()]);
+  const extraPageNums = [...pages.slice(3), 6, 7, 8, 9, 10];
+  const extraPages = await Promise.all(extraPageNums.map((p) => fetchPage(genreId, p)));
+  pool = dedup([...pool, ...extraPages.flat()]);
+
+  if (decade !== null) {
+    const withDecade = filterByDecade(pool, decade);
+    if (withDecade.length >= needed) return shuffle(withDecade);
   }
 
   return shuffle(pool);
