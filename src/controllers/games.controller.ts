@@ -2,6 +2,8 @@ import { Request, Response, NextFunction } from 'express';
 import { prisma } from '../lib/prisma';
 import { AppError } from '../lib/errors';
 import { fetchAnimePool, fetchScreenshots } from '../lib/shikimori';
+import { fetchEnglishTitles } from '../lib/anilist';
+import { extractCoreTitle } from '../lib/fuzzy';
 
 export async function getMyGames(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
@@ -69,6 +71,9 @@ export async function createGame(req: Request, res: Response, next: NextFunction
 
     const selected = pool.slice(0, room.nRondas);
 
+    const malIds = selected.map((a) => a.id);
+    const englishTitles = await fetchEnglishTitles(malIds);
+
     const rounds = await Promise.all(
       selected.map(async (anime, index) => {
         const fallback = `https://shikimori.one${anime.image.preview}`;
@@ -78,7 +83,15 @@ export async function createGame(req: Request, res: Response, next: NextFunction
           ? parsedYear
           : null;
         const episodes = typeof anime.episodes === 'number' && anime.episodes > 0 ? anime.episodes : null;
-        return { animeId: anime.id, animeTitle: anime.name, imageUrls, order: index + 1, year, episodes };
+        return {
+          animeId: anime.id,
+          animeTitle: extractCoreTitle(anime.name),
+          animeTitleEnglish: englishTitles.get(anime.id) ? extractCoreTitle(englishTitles.get(anime.id)!) : null,
+          imageUrls,
+          order: index + 1,
+          year,
+          episodes,
+        };
       }),
     );
 
