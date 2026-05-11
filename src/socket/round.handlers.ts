@@ -212,7 +212,7 @@ export async function onPlayerLeave(io: AppServer, roomId: string, userId: strin
       select: { animeTitle: true },
     })
     io.to(roomId).emit('round:timeout', { roundId, animeTitle: round?.animeTitle ?? '' })
-    clearRound(roundId)
+    clearRound(roundId, roundOnEnd.get(roundId))
   }
 }
 
