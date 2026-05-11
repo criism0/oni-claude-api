@@ -17,17 +17,6 @@ const roundStartTime = new Map<string, number>()   // roundId → start timestam
 const roundRevealLevel = new Map<string, number>() // roundId → current reveal %
 const roundDuration = new Map<string, number>()    // roundId → durationSec
 
-// ── Snapshot completo de la ronda para re-emitir al jugador que hace rejoin --
-type RoundSnapshot = {
-  roundId: string
-  order: number
-  durationSec: number
-  totalRounds: number
-  imageUrl: string
-  startedAt: number  // Unix ms — el cliente lo usa para calcular el tiempo restante
-}
-const roundSnapshot = new Map<string, RoundSnapshot>()  // roundId → snapshot
-
 type Hint = { type: 'year' | 'episodes' | 'title'; value: string; valueEnglish?: string }
 const roundHints = new Map<string, Hint[]>()             // roundId → hints emitidos hasta ahora
 const roundPrecomputedHints = new Map<string, Hint[]>()  // roundId → [year, episodes, title] pre-calculados
@@ -127,19 +116,15 @@ export async function startRound(
   roundOnEnd.set(roundId, onEnd)
 
   // tracking para checkpoints y cálculo de puntos
-  const startedAt = Date.now()
-  roundStartTime.set(roundId, startedAt)
+  roundStartTime.set(roundId, Date.now())
   roundRevealLevel.set(roundId, 0)
   roundDuration.set(roundId, durationSec)
-
-  // snapshot completo para poder re-emitir al jugador que hace rejoin
-  roundSnapshot.set(roundId, { roundId, order, durationSec, totalRounds, imageUrl, startedAt })
 
   const tracked = socketRounds.get(socketId) ?? new Set<string>()
   tracked.add(roundId)
   socketRounds.set(socketId, tracked)
 
-  io.to(roomId).emit('round:start', { roundId, order, durationSec, totalRounds, imageUrl, startedAt })
+  io.to(roomId).emit('round:start', { roundId, order, durationSec, totalRounds, imageUrl })
 
   const checkpoints = [0.25, 0.5, 0.75, 1.0]
   const timers: NodeJS.Timeout[] = []
@@ -196,7 +181,6 @@ export function clearRound(roundId: string, onEnd?: () => void): void {
   roundStartTime.delete(roundId)
   roundRevealLevel.delete(roundId)
   roundDuration.delete(roundId)
-  roundSnapshot.delete(roundId)
   roundHints.delete(roundId)
   roundPrecomputedHints.delete(roundId)
 
@@ -252,23 +236,6 @@ export function emitCatchupHints(socket: AppSocket, roomId: string): void {
   const accumulated = roundHints.get(roundId) ?? []
   for (const hint of accumulated) {
     socket.emit('round:hint', { roundId, ...hint })
-  }
-}
-
-// Re-emite el estado actual de la ronda al socket que acaba de hacer rejoin.
-// Incluye startedAt para que el cliente calcule el tiempo restante correctamente.
-export function emitCatchupRound(socket: AppSocket, roomId: string): void {
-  const roundId = roomActiveRound.get(roomId)
-  if (!roundId) return
-
-  const snap = roundSnapshot.get(roundId)
-  if (!snap) return
-
-  socket.emit('round:start', snap)
-
-  const percent = roundRevealLevel.get(roundId) ?? 0
-  if (percent > 0) {
-    socket.emit('round:reveal', { roundId, percent })
   }
 }
 

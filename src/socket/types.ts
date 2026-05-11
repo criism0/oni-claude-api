@@ -21,7 +21,6 @@ export interface ServerToClientEvents {
     durationSec: number
     totalRounds: number
     imageUrl: string
-    startedAt: number  // Unix ms — permite al cliente calcular el tiempo restante en rejoin
   }) => void
   'round:reveal': (payload: { roundId: string; percent: number }) => void
   'round:hint': (payload: {
