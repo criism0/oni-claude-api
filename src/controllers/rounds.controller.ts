@@ -1,7 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import { prisma } from '../lib/prisma';
 import { AppError } from '../lib/errors';
-import { isCloseEnough } from '../lib/levenshtein';
+import { isCorrectGuess } from '../lib/fuzzy';
 
 export async function getRound(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
@@ -60,7 +60,7 @@ export async function submitGuess(req: Request, res: Response, next: NextFunctio
       throw new AppError(400, 'Ya respondiste correctamente esta ronda');
     }
 
-    const correct = isCloseEnough(guess, round.animeTitle);
+    const correct = isCorrectGuess(guess, round.animeTitle, round.animeTitleEnglish);
     const points = correct ? 100 : 0;
 
     const score = await prisma.score.upsert({
