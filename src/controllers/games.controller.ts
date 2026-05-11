@@ -13,7 +13,7 @@ export async function getMyGames(req: Request, res: Response, next: NextFunction
       where: { status: 'FINISHED', scores: { some: { userId } } },
       take: 50,
       include: {
-        room: { select: { name: true } },
+        room: { select: { name: true, ownerId: true } },
         scores: { select: { userId: true, points: true } },
         _count: { select: { rounds: true } },
       },
@@ -30,6 +30,8 @@ export async function getMyGames(req: Request, res: Response, next: NextFunction
 
       return {
         id: game.id,
+        roomId: game.roomId,
+        roomOwnerId: game.room.ownerId,
         roomName: game.room.name,
         endedAt: game.endedAt,
         totalPoints: totals.get(userId) ?? 0,
