@@ -10,6 +10,7 @@ const socketRounds = new Map<string, Set<string>>()
 const roundCorrect = new Map<string, Set<string>>()
 const roundPending = new Map<string, Set<string>>()
 const roomActiveRound = new Map<string, string>()
+const roundOnEnd = new Map<string, (() => void) | undefined>()  // roundId → callback para siguiente ronda
 
 // ── Maps nuevos: tracking de tiempo y revelación para cálculo de puntos --
 const roundStartTime = new Map<string, number>()   // roundId → start timestamp
@@ -112,6 +113,7 @@ export async function startRound(
   roundCorrect.set(roundId, new Set())
   roundPending.set(roundId, pending)
   roomActiveRound.set(roomId, roundId)
+  roundOnEnd.set(roundId, onEnd)
 
   // tracking para checkpoints y cálculo de puntos
   roundStartTime.set(roundId, Date.now())
@@ -175,6 +177,7 @@ export function clearRound(roundId: string, onEnd?: () => void): void {
 
   roundCorrect.delete(roundId)
   roundPending.delete(roundId)
+  roundOnEnd.delete(roundId)
   roundStartTime.delete(roundId)
   roundRevealLevel.delete(roundId)
   roundDuration.delete(roundId)
@@ -288,7 +291,13 @@ export function registerRoundHandlers(io: AppServer, socket: AppSocket): void {
     io.to(roomId).emit('score:update', { scores })
 
     if (roundPending.get(roundId)?.size === 0) {
-      clearRound(roundId)
+      // Todos acertaron: revelar imagen y título antes de avanzar
+      const roomId = roundRoom.get(roundId)
+      if (roomId) {
+        io.to(roomId).emit('round:timeout', { roundId, animeTitle: round.animeTitle })
+      }
+      const storedOnEnd = roundOnEnd.get(roundId)
+      clearRound(roundId, storedOnEnd)
     }
   })
 }
