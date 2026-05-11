@@ -112,6 +112,7 @@ export async function getGame(req: Request, res: Response, next: NextFunction): 
     const game = await prisma.game.findUnique({
       where: { id },
       include: {
+        room: { select: { code: true, name: true } },
         rounds: { orderBy: { order: 'asc' } },
         scores: {
           include: { user: { select: { id: true, username: true } } },

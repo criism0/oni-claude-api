@@ -22,6 +22,27 @@ async function endGame(io: AppServer, gameId: string, roomId: string): Promise<v
       where: { id: gameId },
       data: { status: 'FINISHED', endedAt: new Date() },
     })
+
+    // Crear entradas de 0 puntos para jugadores conectados que nunca respondieron.
+    // skipDuplicates ignora los que ya tienen score (@@unique userId+roundId).
+    const roomSockets = await io.in(roomId).fetchSockets()
+    if (roomSockets.length > 0) {
+      const rounds = await prisma.round.findMany({
+        where: { gameId },
+        select: { id: true },
+      })
+      const zeroScores = roomSockets.flatMap(({ data }) =>
+        rounds.map((r) => ({
+          userId:  data.user.userId,
+          gameId,
+          roundId: r.id,
+          points:  0,
+          correct: false,
+        })),
+      )
+      await prisma.score.createMany({ data: zeroScores, skipDuplicates: true })
+    }
+
     const scores = await fetchGameScores(gameId)
     gameRounds.delete(gameId)
     io.to(roomId).emit('game:ended', { gameId, scores })
