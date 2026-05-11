@@ -1,6 +1,6 @@
 import { prisma } from '../lib/prisma'
 import type { AppServer, AppSocket } from './types'
-import { startRound, clearRound, getSocketRoundIds } from './round.handlers'
+import { startRound, clearRound } from './round.handlers'
 import { fetchGameScores } from '../lib/scores'
 
 // gameId → roundIds activos (para limpieza en game:end)
@@ -122,21 +122,6 @@ export function registerGameHandlers(io: AppServer, socket: AppSocket): void {
       }).catch(() => {})
       if (roomId) {
         io.to(roomId).emit('game:error', { gameId })
-      }
-    }
-  })
-
-  socket.on('disconnect', () => {
-    const socketRoundIds = getSocketRoundIds(socket.id)
-    for (const [gameId, roundSet] of gameRounds) {
-      for (const roundId of roundSet) {
-        if (socketRoundIds.has(roundId)) {
-          for (const id of roundSet) clearRound(id)
-          const pending = pendingTransitions.get(gameId)
-          if (pending) { clearTimeout(pending); pendingTransitions.delete(gameId) }
-          gameRounds.delete(gameId)
-          break
-        }
       }
     }
   })
