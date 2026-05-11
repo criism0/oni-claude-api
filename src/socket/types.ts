@@ -11,6 +11,7 @@ export interface ServerToClientEvents {
   'room:left': (payload: { userId: string; username: string }) => void
   'room:players': (payload: { players: Array<{ userId: string; username: string }> }) => void
   'room:full': () => void
+  'room:duplicate-session': () => void
   'room:error': (payload: { code: string }) => void
   'game:started': (payload: { gameId: string }) => void
   'game:ended': (payload: { gameId: string; scores: ScoreSummary[] }) => void

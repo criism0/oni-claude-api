@@ -17,6 +17,14 @@ export function registerRoomHandlers(io: AppServer, socket: AppSocket): void {
 
       if (!alreadyInRoom) {
         const existing = await io.in(roomId).fetchSockets()
+
+        const isDuplicate = existing.some((s) => s.data.user.userId === userId)
+        if (isDuplicate) {
+          console.log(`[socket] room:join blocked: duplicate session for ${username} in ${roomId}`)
+          socket.emit('room:duplicate-session')
+          return
+        }
+
         if (existing.length >= room.maxPlayers) {
           console.log(`[socket] room:join blocked: ${username} → ${roomId} full (${existing.length}/${room.maxPlayers})`)
           socket.emit('room:full')
