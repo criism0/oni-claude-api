@@ -27,6 +27,7 @@ export interface ServerToClientEvents {
     roundId: string
     type: 'year' | 'episodes' | 'title'
     value: string
+    valueEnglish?: string
   }) => void
   'round:correct': (payload: {
     roundId: string
@@ -34,6 +35,7 @@ export interface ServerToClientEvents {
     username: string
     points: number
   }) => void
+  'round:incorrect': (payload: { roundId: string }) => void
   'round:timeout': (payload: { roundId: string; animeTitle: string }) => void
   'score:update': (payload: { scores: ScoreSummary[] }) => void
 }

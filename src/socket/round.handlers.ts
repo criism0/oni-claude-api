@@ -1,5 +1,5 @@
 import { prisma } from '../lib/prisma'
-import { isCloseEnough } from '../lib/levenshtein'
+import { isCorrectGuess } from '../lib/fuzzy'
 import { fetchGameScores } from '../lib/scores'
 import type { AppServer, AppSocket } from './types'
 
@@ -16,15 +16,12 @@ const roundStartTime = new Map<string, number>()   // roundId → start timestam
 const roundRevealLevel = new Map<string, number>() // roundId → current reveal %
 const roundDuration = new Map<string, number>()    // roundId → durationSec
 
-type Hint = { type: 'year' | 'episodes' | 'title'; value: string }
+type Hint = { type: 'year' | 'episodes' | 'title'; value: string; valueEnglish?: string }
 const roundHints = new Map<string, Hint[]>()             // roundId → hints emitidos hasta ahora
 const roundPrecomputedHints = new Map<string, Hint[]>()  // roundId → [year, episodes, title] pre-calculados
 
-function buildHints(animeTitle: string, year: number | null, episodes: number | null): Hint[] {
-  const yearHint: Hint = { type: 'year', value: year != null ? String(year) : '???' }
-  const episodesHint: Hint = { type: 'episodes', value: episodes != null ? String(episodes) : '???' }
-
-  const chars = animeTitle.split('')
+function maskTitle(title: string): string {
+  const chars = title.split('')
   const nonSpaceIndices = chars.map((c, i) => (c !== ' ' ? i : -1)).filter((i) => i !== -1)
   const revealCount = Math.max(1, Math.ceil(nonSpaceIndices.length * 0.1))
   const arr = [...nonSpaceIndices]
@@ -33,9 +30,22 @@ function buildHints(animeTitle: string, year: number | null, episodes: number | 
     ;[arr[i], arr[j]] = [arr[j], arr[i]]
   }
   const revealedSet = new Set(arr.slice(0, revealCount))
-  const masked = chars.map((c, i) => (c === ' ' ? ' ' : revealedSet.has(i) ? c : '_')).join('')
+  return chars.map((c, i) => (c === ' ' ? ' ' : revealedSet.has(i) ? c : '_')).join('')
+}
 
-  const titleHint: Hint = { type: 'title', value: masked }
+function buildHints(
+  animeTitle: string,
+  year: number | null,
+  episodes: number | null,
+  animeTitleEnglish: string | null,
+): Hint[] {
+  const yearHint: Hint = { type: 'year', value: year != null ? String(year) : '???' }
+  const episodesHint: Hint = { type: 'episodes', value: episodes != null ? String(episodes) : '???' }
+  const titleHint: Hint = {
+    type: 'title',
+    value: maskTitle(animeTitle),
+    ...(animeTitleEnglish ? { valueEnglish: maskTitle(animeTitleEnglish) } : {}),
+  }
   return [yearHint, episodesHint, titleHint]
 }
 
@@ -72,12 +82,12 @@ export async function startRound(
 
   const roundData = await prisma.round.findUnique({
     where: { id: roundId },
-    select: { animeTitle: true, year: true, episodes: true },
+    select: { animeTitle: true, animeTitleEnglish: true, year: true, episodes: true },
   })
   roundPrecomputedHints.set(
     roundId,
     roundData
-      ? buildHints(roundData.animeTitle, roundData.year, roundData.episodes)
+      ? buildHints(roundData.animeTitle, roundData.year, roundData.episodes, roundData.animeTitleEnglish)
       : [
           { type: 'year', value: '???' },
           { type: 'episodes', value: '???' },
@@ -244,7 +254,7 @@ export function registerRoundHandlers(io: AppServer, socket: AppSocket): void {
 
     const round = await prisma.round.findUnique({
       where: { id: roundId },
-      select: { animeTitle: true, gameId: true },
+      select: { animeTitle: true, animeTitleEnglish: true, gameId: true },
     })
     if (!round) {
       // Roll back: round not found
@@ -253,11 +263,11 @@ export function registerRoundHandlers(io: AppServer, socket: AppSocket): void {
       return
     }
 
-    const correct = isCloseEnough(guess, round.animeTitle)
+    const correct = isCorrectGuess(guess, round.animeTitle, round.animeTitleEnglish)
     if (!correct) {
-      // Roll back: wrong answer — player puede seguir intentando
       roundCorrect.get(roundId)?.delete(userId)
       roundPending.get(roundId)?.add(userId)
+      socket.emit('round:incorrect', { roundId })
       return
     }
 
