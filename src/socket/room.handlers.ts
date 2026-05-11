@@ -1,6 +1,6 @@
 import { prisma } from '../lib/prisma'
 import type { AppServer, AppSocket } from './types'
-import { clearSocketRounds, onPlayerJoin, onPlayerLeave, emitCatchupHints } from './round.handlers'
+import { onPlayerJoin, onPlayerLeave, emitCatchupHints } from './round.handlers'
 
 export function registerRoomHandlers(io: AppServer, socket: AppSocket): void {
   socket.on('room:join', async ({ roomId }) => {
@@ -65,7 +65,4 @@ export function registerRoomHandlers(io: AppServer, socket: AppSocket): void {
     }
   })
 
-  socket.on('disconnect', () => {
-    clearSocketRounds(socket.id)
-  })
 }
