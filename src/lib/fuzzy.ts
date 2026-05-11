@@ -2,7 +2,7 @@ import fuzzball from 'fuzzball'
 
 export function extractCoreTitle(title: string): string {
   return title
-    .replace(/\s*[:\-–]\s*.+$/, '')
+    .replace(/\s+[:\-–]\s*.+$/, '')
     .replace(/\s+(season|part|cour)\s+\d+/gi, '')
     .replace(/\s+\d+(st|nd|rd|th)\s+season/gi, '')
     .replace(/\s+M{0,4}(CM|CD|D?C{0,3})(XC|XL|L?X{0,3})(IX|IV|V?I{0,3})$/i, '')
