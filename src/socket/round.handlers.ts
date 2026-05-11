@@ -209,10 +209,21 @@ export async function onPlayerLeave(io: AppServer, roomId: string, userId: strin
   if (roundPending.get(roundId)?.size === 0) {
     const round = await prisma.round.findUnique({
       where: { id: roundId },
-      select: { animeTitle: true },
+      select: { animeTitle: true, gameId: true },
     })
     io.to(roomId).emit('round:timeout', { roundId, animeTitle: round?.animeTitle ?? '' })
     clearRound(roundId)
+
+    if (round?.gameId) {
+      const { count } = await prisma.game.updateMany({
+        where: { id: round.gameId, status: 'IN_PROGRESS' },
+        data: { status: 'FINISHED', endedAt: new Date() },
+      })
+      if (count > 0) {
+        const scores = await fetchGameScores(round.gameId)
+        io.to(roomId).emit('game:ended', { gameId: round.gameId, scores })
+      }
+    }
   }
 }
 
